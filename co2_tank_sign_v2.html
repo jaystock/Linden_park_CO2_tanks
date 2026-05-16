@@ -1,0 +1,214 @@
+<h2 class="sr-only">CO2 tank checkout tracker — tap your name to check out 1 or 2 tanks or return them</h2>
+
+<style>
+#app{padding:1rem 0}
+.header{text-align:center;margin-bottom:1.25rem}
+.header h1{margin:0;font-size:20px;font-weight:500;color:var(--color-text-primary)}
+.header p{margin:4px 0 0;font-size:13px;color:var(--color-text-secondary)}
+.tanks{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1.25rem}
+.tank-card{background:var(--color-background-secondary);border-radius:var(--border-radius-lg);padding:1rem;text-align:center;border:0.5px solid var(--color-border-tertiary)}
+.tank-card.occupied{background:var(--color-background-warning);border-color:var(--color-border-warning)}
+.tank-card.available{background:var(--color-background-success);border-color:var(--color-border-success)}
+.tank-label{font-size:12px;margin:0 0 2px;color:var(--color-text-secondary)}
+.tank-card.occupied .tank-label{color:var(--color-text-warning)}
+.tank-card.available .tank-label{color:var(--color-text-success)}
+.tank-who{font-size:15px;font-weight:500;margin:0;color:var(--color-text-primary)}
+.tank-card.occupied .tank-who{color:var(--color-text-warning)}
+.tank-card.available .tank-who{color:var(--color-text-success)}
+.tank-date{font-size:11px;margin:3px 0 0;color:var(--color-text-secondary)}
+.tank-card.occupied .tank-date{color:var(--color-text-warning)}
+.section-label{font-size:12px;font-weight:500;color:var(--color-text-secondary);margin:0 0 8px}
+.neighbor-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:7px;margin-bottom:1.25rem}
+.neighbor-btn{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);cursor:pointer;width:100%;text-align:left}
+.neighbor-btn:hover{background:var(--color-background-secondary)}
+.neighbor-btn.has-tank{background:var(--color-background-warning);border-color:var(--color-border-warning)}
+.neighbor-name{font-size:13px;color:var(--color-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:105px}
+.neighbor-btn.has-tank .neighbor-name{color:var(--color-text-warning)}
+.tank-count-badge{font-size:11px;font-weight:600;background:var(--color-background-warning);color:var(--color-text-warning);border-radius:99px;padding:1px 7px;flex-shrink:0}
+.toast{position:sticky;bottom:12px;left:0;right:0;margin:0 auto;max-width:320px;background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:10px 16px;font-size:13px;color:var(--color-text-primary);text-align:center;opacity:0;transition:opacity 0.2s;pointer-events:none}
+.toast.show{opacity:1}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:100;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--color-background-primary);border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-tertiary);padding:1.5rem;width:290px;max-width:90vw}
+.modal h3{margin:0 0 4px;font-size:16px;font-weight:500;color:var(--color-text-primary)}
+.modal p{margin:0 0 1rem;font-size:13px;color:var(--color-text-secondary)}
+.qty-row{display:flex;align-items:center;gap:10px;margin-bottom:1.25rem}
+.qty-row label{font-size:13px;color:var(--color-text-primary)}
+.qty-btns{display:flex;gap:6px}
+.qty-btn{width:36px;height:36px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);font-size:16px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--color-text-primary)}
+.qty-btn.selected{background:var(--color-accent-primary);border-color:var(--color-accent-primary);color:#fff}
+.modal-btns{display:flex;gap:8px}
+.modal-btns button{flex:1}
+.btn-checkout{background:var(--color-background-warning);border-color:var(--color-border-warning);color:var(--color-text-warning)}
+.btn-return{background:var(--color-background-success);border-color:var(--color-border-success);color:var(--color-text-success)}
+.btn-cancel{color:var(--color-text-secondary)}
+</style>
+
+<div id="app">
+  <div class="header">
+    <h1>🦟 CO₂ tank checkout</h1>
+    <p>Mosquito control · Tap your name to check out or return</p>
+  </div>
+  <div class="tanks" id="tank-summary"></div>
+  <p class="section-label">Neighbors — tap your name</p>
+  <div class="neighbor-grid" id="neighbor-grid"></div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h3 id="modal-name"></h3>
+    <p id="modal-sub"></p>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+const NEIGHBORS = ["Jason Stockmann","Hannah Ephraim","Michi Schebesta","Simin Falsafi","José Luis Rojas","Piotr Mitros","Lena Curran","Joanne Kong","Sandra March","Christa Nehs","Lino Becerra","Jim Gray","Mila Pinigin","Titi Alailima","April Luna","Upasana Davies","Gayle Sherman","Ben Davies","Mark Curby","Ramesh Raskar"];
+const MAX_TANKS = 2;
+const KEY = 'co2_tanks_v3';
+let state = {};
+let pendingName = null;
+let selectedQty = 1;
+
+async function load() {
+  try {
+    const res = await window.storage.get(KEY, true);
+    state = res ? JSON.parse(res.value) : {};
+  } catch(e) { state = {}; }
+  render();
+}
+
+async function save() {
+  try { await window.storage.set(KEY, JSON.stringify(state), true); } catch(e) {}
+}
+
+function tanksOut() {
+  return Object.values(state).reduce((s, v) => s + (v.qty || 0), 0);
+}
+
+function fmt(iso) {
+  if (!iso) return '';
+  return 'since ' + new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+}
+
+function render() {
+  const out = tanksOut();
+  const ts = document.getElementById('tank-summary');
+  const cards = [];
+  let filled = 0;
+  // Build per-slot view: who occupies slot 1 and slot 2
+  const slots = [null, null];
+  Object.entries(state).forEach(([name, v]) => {
+    if (!v.qty) return;
+    for (let i = 0; i < v.qty; i++) {
+      if (filled < MAX_TANKS) { slots[filled] = {name, date: v.date}; filled++; }
+    }
+  });
+  for (let i = 0; i < MAX_TANKS; i++) {
+    const s = slots[i];
+    if (s) {
+      cards.push(`<div class="tank-card occupied">
+        <p class="tank-label">Tank ${i+1} · out</p>
+        <p class="tank-who">${s.name.split(' ')[0]}</p>
+        <p class="tank-date">${fmt(s.date)}</p>
+      </div>`);
+    } else {
+      cards.push(`<div class="tank-card available">
+        <p class="tank-label">Tank ${i+1}</p>
+        <p class="tank-who">Available</p>
+        <p class="tank-date">&nbsp;</p>
+      </div>`);
+    }
+  }
+  ts.innerHTML = cards.join('');
+
+  const grid = document.getElementById('neighbor-grid');
+  grid.innerHTML = NEIGHBORS.map(name => {
+    const qty = state[name]?.qty || 0;
+    const has = qty > 0;
+    const badge = has ? `<span class="tank-count-badge">${qty} tank${qty>1?'s':''}</span>` : '';
+    return `<button class="neighbor-btn${has?' has-tank':''}" onclick="openModal('${name.replace(/'/g,"\\'")}')">
+      <span class="neighbor-name">${name}</span>${badge}
+    </button>`;
+  }).join('');
+}
+
+function openModal(name) {
+  pendingName = name;
+  selectedQty = 1;
+  const has = (state[name]?.qty || 0) > 0;
+  const currentQty = state[name]?.qty || 0;
+  const out = tanksOut();
+  const avail = MAX_TANKS - out;
+
+  document.getElementById('modal-name').textContent = name;
+
+  if (has) {
+    document.getElementById('modal-sub').textContent = `You have ${currentQty} tank${currentQty>1?'s':''} checked out. Return ${currentQty>1?'them':'it'}?`;
+    document.getElementById('modal-body').innerHTML = `
+      <div class="modal-btns">
+        <button class="btn-return" onclick="doReturn()">↩ Return ${currentQty>1?'both tanks':'tank'}</button>
+        <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      </div>`;
+  } else if (avail === 0) {
+    document.getElementById('modal-sub').textContent = 'Both tanks are currently checked out. Check back soon!';
+    document.getElementById('modal-body').innerHTML = `
+      <div class="modal-btns"><button class="btn-cancel" onclick="closeModal()" style="flex:1">Close</button></div>`;
+  } else {
+    document.getElementById('modal-sub').textContent = `${avail} tank${avail>1?'s':''} available. How many do you need?`;
+    const btn2 = avail >= 2 ? `<button class="qty-btn" id="qty2" onclick="setQty(2)">2</button>` : '';
+    document.getElementById('modal-body').innerHTML = `
+      <div class="qty-row">
+        <span style="font-size:13px;color:var(--color-text-primary)">Tanks:</span>
+        <div class="qty-btns">
+          <button class="qty-btn selected" id="qty1" onclick="setQty(1)">1</button>
+          ${btn2}
+        </div>
+      </div>
+      <div class="modal-btns">
+        <button class="btn-checkout" onclick="doCheckout()">↗ Check out</button>
+        <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      </div>`;
+  }
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+function setQty(n) {
+  selectedQty = n;
+  document.querySelectorAll('.qty-btn').forEach(b => b.classList.remove('selected'));
+  const el = document.getElementById('qty'+n);
+  if (el) el.classList.add('selected');
+}
+
+function closeModal() {
+  document.getElementById('modal-bg').classList.remove('open');
+  pendingName = null;
+}
+
+async function doCheckout() {
+  if (!pendingName) return;
+  state[pendingName] = { qty: selectedQty, date: new Date().toISOString() };
+  await save(); closeModal(); render();
+  toast(`${selectedQty} tank${selectedQty>1?'s':''} checked out to ${pendingName.split(' ')[0]} 🎉`);
+}
+
+async function doReturn() {
+  if (!pendingName) return;
+  state[pendingName] = { qty: 0, date: null };
+  await save(); closeModal(); render();
+  toast(`Tank${(state[pendingName]?.qty||0)>1?'s':''} returned by ${pendingName.split(' ')[0]} — thanks!`);
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+document.getElementById('modal-bg').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-bg')) closeModal();
+});
+
+load();
+</script>
