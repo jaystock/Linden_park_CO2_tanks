@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CO₂ Tank Checkout · Mosquito Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ── Reset & base ─────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #f5f2eb;
+    --card:     #fffef9;
+    --border:   #ddd8cc;
+    --text:     #1a1a18;
+    --muted:    #7a7568;
+    --copper:   #b5651d;
+    --copper-l: #f5e6d8;
+    --green:    #3a6b3a;
+    --green-l:  #e4f0e4;
+    --amber:    #92600a;
+    --amber-l:  #fef3dc;
+    --red:      #8b2020;
+    --red-l:    #fde8e8;
+    --radius:   10px;
+    --mono:     'DM Mono', monospace;
+    --sans:     'DM Sans', sans-serif;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  /* ── Header ───────────────────────────────────── */
+  header {
+    background: var(--copper);
+    color: #fff;
+    padding: 1.25rem 1.5rem 1rem;
+    text-align: center;
+  }
+  header h1 { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em; }
+  header p  { font-size: 0.8rem; opacity: 0.8; margin-top: 2px; }
+
+  /* ── Setup banner ─────────────────────────────── */
+  #setup-banner {
+    background: var(--amber-l);
+    border-bottom: 1px solid #e0c98a;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.8rem;
+    color: var(--amber);
+    display: none;
+    text-align: center;
+  }
+  #setup-banner a { color: var(--copper); }
+
+  /* ── Main layout ──────────────────────────────── */
+  main { max-width: 480px; margin: 0 auto; padding: 1.25rem 1rem 4rem; }
+
+  /* ── Tank status cards ────────────────────────── */
+  .tank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1.5rem; }
+
+  .tank-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.9rem 1rem;
+    text-align: center;
+  }
+  .tank-card.available { background: var(--green-l); border-color: #b0cdb0; }
+  .tank-card.occupied  { background: var(--amber-l); border-color: #e0c07a; }
+
+  .tank-card .label { font-size: 0.7rem; font-family: var(--mono); letter-spacing: 0.05em; color: var(--muted); text-transform: uppercase; }
+  .tank-card.available .label { color: var(--green); }
+  .tank-card.occupied  .label { color: var(--amber); }
+  .tank-card .who  { font-size: 1rem; font-weight: 600; margin: 4px 0 2px; }
+  .tank-card.available .who { color: var(--green); }
+  .tank-card.occupied  .who { color: var(--amber); }
+  .tank-card .when { font-size: 0.7rem; color: var(--muted); font-family: var(--mono); }
+
+  /* ── Section heading ──────────────────────────── */
+  .section-head {
+    font-size: 0.7rem;
+    font-family: var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  /* ── Neighbor grid ────────────────────────────── */
+  .neighbor-grid { display: flex; flex-direction: column; gap: 6px; margin-bottom: 1.5rem; }
+
+  .neighbor-row {
+    display: flex;
+    align-items: center;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.7rem 1rem;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+    gap: 10px;
+  }
+  .neighbor-row:hover { background: #f0ede6; }
+  .neighbor-row.has-tank { background: var(--amber-l); border-color: #e0c07a; }
+  .neighbor-row.has-tank:hover { background: #fde9b8; }
+
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+  .neighbor-row.has-tank .dot { background: var(--amber); }
+
+  .neighbor-name { font-size: 0.95rem; font-weight: 500; flex: 1; }
+  .neighbor-row.has-tank .neighbor-name { color: var(--amber); }
+
+  .tank-badge {
+    font-size: 0.7rem;
+    font-family: var(--mono);
+    background: var(--amber);
+    color: #fff;
+    border-radius: 99px;
+    padding: 1px 8px;
+    white-space: nowrap;
+  }
+
+  /* ── Modal ────────────────────────────────────── */
+  .modal-bg {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4); z-index: 200;
+    align-items: flex-end; justify-content: center;
+    padding: 0;
+  }
+  .modal-bg.open { display: flex; }
+
+  .modal {
+    background: var(--card);
+    border-radius: var(--radius) var(--radius) 0 0;
+    border-top: 1px solid var(--border);
+    padding: 1.5rem 1.25rem 2rem;
+    width: 100%; max-width: 480px;
+    animation: slideup 0.2s ease;
+  }
+  @keyframes slideup { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  .modal-name { font-size: 1.1rem; font-weight: 600; margin-bottom: 4px; }
+  .modal-sub  { font-size: 0.85rem; color: var(--muted); margin-bottom: 1.25rem; }
+
+  /* Qty picker */
+  .qty-row { display: flex; align-items: center; gap: 12px; margin-bottom: 1.25rem; }
+  .qty-row label { font-size: 0.85rem; color: var(--muted); }
+  .qty-btns { display: flex; gap: 8px; }
+  .qty-btn {
+    width: 42px; height: 42px; border-radius: 8px;
+    border: 1.5px solid var(--border);
+    background: var(--bg); font-size: 1.1rem; font-weight: 600;
+    cursor: pointer; color: var(--text); font-family: var(--mono);
+    transition: all 0.1s;
+  }
+  .qty-btn.selected { background: var(--copper); border-color: var(--copper); color: #fff; }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 8px; }
+  .btn {
+    flex: 1; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem;
+    font-weight: 600; font-family: var(--sans); cursor: pointer; border: 1.5px solid;
+    transition: opacity 0.1s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn-checkout { background: var(--amber);  border-color: var(--amber);  color: #fff; }
+  .btn-return   { background: var(--green);  border-color: var(--green);  color: #fff; }
+  .btn-cancel   { background: transparent;   border-color: var(--border); color: var(--muted); flex: 0.6; }
+
+  /* ── Toast ────────────────────────────────────── */
+  .toast {
+    position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: #fff; border-radius: 99px;
+    padding: 0.6rem 1.25rem; font-size: 0.85rem; white-space: nowrap;
+    opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 300;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ── Error state ──────────────────────────────── */
+  .error-box {
+    background: var(--red-l); border: 1px solid #e0a0a0;
+    border-radius: var(--radius); padding: 1rem; font-size: 0.85rem;
+    color: var(--red); margin-bottom: 1rem; display: none;
+  }
+
+  /* ── Loading ──────────────────────────────────── */
+  .loading { text-align: center; padding: 2rem; color: var(--muted); font-family: var(--mono); font-size: 0.85rem; }
+
+  /* ── Footer ───────────────────────────────────── */
+  footer { text-align: center; font-size: 0.7rem; color: var(--muted); margin-top: 2rem; font-family: var(--mono); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🦟 CO₂ Tank Checkout</h1>
+  <p>Neighborhood Mosquito Control Program</p>
+</header>
+
+<div id="setup-banner">
+  ⚠️ Script URL not configured — see setup instructions in the README.
+</div>
+
+<main>
+  <div class="error-box" id="error-box"></div>
+  <div id="loading" class="loading">Loading tank status…</div>
+  <div id="content" style="display:none">
+    <div class="tank-grid" id="tank-grid"></div>
+    <p class="section-head">Neighbors — tap your name</p>
+    <div class="neighbor-grid" id="neighbor-grid"></div>
+    <footer>Data saved to Google Sheets · Updates live</footer>
+  </div>
+</main>
+
+<!-- Modal -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <p class="modal-name" id="modal-name"></p>
+    <p class="modal-sub"  id="modal-sub"></p>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── CONFIGURATION ────────────────────────────────────────────
+// After deploying your Apps Script, paste your Web App URL here:
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxaN892zZJq0e697MkvbRq96TMgAqk447J1Wv9hxyHx_OL8LR4_GHnGegeMEe3m9IhgCA/exec";
+// ─────────────────────────────────────────────────────────────
+
+const NEIGHBORS = [
+  "Jason Stockmann","Hannah Ephraim","Michi Schebesta","Simin Falsafi",
+  "José Luis Rojas","Piotr Mitros","Lena Curran","Joanne Kong",
+  "Sandra March","Christa Nehs","Lino Becerra","Jim Gray",
+  "Mila Pinigin","Titi Alailima","April Luna","Upasana Davies",
+  "Gayle Sherman","Ben Davies","Mark Curby","Ramesh Raskar"
+];
+const MAX_TANKS = 2;
+
+let state = {};
+let tanksOut = 0;
+let pendingName = null;
+let selectedQty = 1;
+
+// ── API calls via JSONP (avoids CORS issues with Apps Script) ──
+function api(params) {
+  return new Promise((resolve, reject) => {
+    const cbName = "cb_" + Math.random().toString(36).slice(2);
+    params.callback = cbName;
+    const url = SCRIPT_URL + "?" + new URLSearchParams(params);
+    const script = document.createElement("script");
+    script.src = url;
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("Timeout"));
+    }, 10000);
+    window[cbName] = (data) => {
+      cleanup();
+      resolve(data);
+    };
+    function cleanup() {
+      clearTimeout(timer);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+    script.onerror = () => { cleanup(); reject(new Error("Script load error")); };
+    document.head.appendChild(script);
+  });
+}
+
+// ── Load state ───────────────────────────────────────────────
+async function load() {
+  if (SCRIPT_URL === "YOUR_APPS_SCRIPT_URL_HERE") {
+    document.getElementById('setup-banner').style.display = 'block';
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+    // Show demo state so layout is visible
+    renderAll({ state: {}, tanksOut: 0 });
+    return;
+  }
+  try {
+    const data = await api({ action: "getState" });
+    renderAll(data);
+  } catch(e) {
+    showError("Couldn't reach the server. Check your Script URL.");
+  }
+}
+
+function renderAll(data) {
+  state = data.state || {};
+  tanksOut = data.tanksOut || 0;
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
+  renderTanks();
+  renderNeighbors();
+}
+
+// ── Render tank cards ────────────────────────────────────────
+function renderTanks() {
+  const slots  = [null, null];
+  let   filled = 0;
+  Object.entries(state).forEach(([name, v]) => {
+    if (v.action !== "checkout") return;
+    for (let i = 0; i < v.qty && filled < MAX_TANKS; i++) {
+      slots[filled++] = { name, date: v.date };
+    }
+  });
+
+  document.getElementById('tank-grid').innerHTML = slots.map((s, i) => {
+    if (s) return `
+      <div class="tank-card occupied">
+        <p class="label">Tank ${i+1} · out</p>
+        <p class="who">${s.name.split(' ')[0]}</p>
+        <p class="when">${fmtDate(s.date)}</p>
+      </div>`;
+    return `
+      <div class="tank-card available">
+        <p class="label">Tank ${i+1}</p>
+        <p class="who">Available</p>
+        <p class="when">&nbsp;</p>
+      </div>`;
+  }).join('');
+}
+
+// ── Render neighbor list ──────────────────────────────────────
+function renderNeighbors() {
+  document.getElementById('neighbor-grid').innerHTML = NEIGHBORS.map(name => {
+    const v   = state[name];
+    const has = v && v.action === "checkout";
+    const qty = has ? v.qty : 0;
+    return `<div class="neighbor-row${has ? ' has-tank' : ''}" onclick="openModal(${JSON.stringify(name)})">
+      <span class="dot"></span>
+      <span class="neighbor-name">${name}</span>
+      ${has ? `<span class="tank-badge">${qty} tank${qty > 1 ? 's' : ''}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── Modal ────────────────────────────────────────────────────
+function openModal(name) {
+  pendingName  = name;
+  selectedQty  = 1;
+  const v      = state[name];
+  const has    = v && v.action === "checkout";
+  const avail  = MAX_TANKS - tanksOut;
+
+  document.getElementById('modal-name').textContent = name;
+  const sub  = document.getElementById('modal-sub');
+  const body = document.getElementById('modal-body');
+
+  if (has) {
+    const qty = v.qty;
+    sub.textContent = `You have ${qty} tank${qty > 1 ? 's' : ''} checked out since ${fmtDate(v.date)}.`;
+    body.innerHTML = `
+      <div class="btn-row">
+        <button class="btn btn-return" onclick="doReturn()">↩ Return ${qty > 1 ? 'both tanks' : 'tank'}</button>
+        <button class="btn btn-cancel" onclick="closeModal()">Cancel</button>
+      </div>`;
+  } else if (avail === 0) {
+    sub.textContent = "Both tanks are currently out. Check back soon!";
+    body.innerHTML = `<div class="btn-row"><button class="btn btn-cancel" onclick="closeModal()" style="flex:1">Close</button></div>`;
+  } else {
+    sub.textContent = `${avail} tank${avail > 1 ? 's' : ''} available. How many do you need?`;
+    const btn2 = avail >= 2
+      ? `<button class="qty-btn" id="qty-2" onclick="setQty(2)">2</button>` : '';
+    body.innerHTML = `
+      <div class="qty-row">
+        <label>Tanks:</label>
+        <div class="qty-btns">
+          <button class="qty-btn selected" id="qty-1" onclick="setQty(1)">1</button>
+          ${btn2}
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-checkout" onclick="doCheckout()">↗ Check out</button>
+        <button class="btn btn-cancel" onclick="closeModal()">Cancel</button>
+      </div>`;
+  }
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+function setQty(n) {
+  selectedQty = n;
+  document.querySelectorAll('.qty-btn').forEach(b => b.classList.remove('selected'));
+  const el = document.getElementById('qty-' + n);
+  if (el) el.classList.add('selected');
+}
+
+function closeModal() {
+  document.getElementById('modal-bg').classList.remove('open');
+  pendingName = null;
+}
+
+// ── Actions ──────────────────────────────────────────────────
+async function doCheckout() {
+  const name = pendingName;
+  closeModal();
+  showToast("Checking out…");
+  try {
+    const res = await api({ action: "checkout", name, qty: selectedQty });
+    if (res.ok) {
+      showToast(`${selectedQty} tank${selectedQty > 1 ? 's' : ''} checked out to ${name.split(' ')[0]} 🎉`);
+      await load();
+    } else {
+      showError(res.error);
+    }
+  } catch(e) { showError("Network error — try again."); }
+}
+
+async function doReturn() {
+  const name = pendingName;
+  closeModal();
+  showToast("Returning…");
+  try {
+    const res = await api({ action: "return", name });
+    if (res.ok) {
+      showToast(`Tank returned by ${name.split(' ')[0]} — thanks! 🌿`);
+      await load();
+    } else {
+      showError(res.error);
+    }
+  } catch(e) { showError("Network error — try again."); }
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+function fmtDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-box');
+  el.textContent = "⚠ " + msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 5000);
+}
+
+document.getElementById('modal-bg').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-bg')) closeModal();
+});
+
+// Auto-refresh every 30 seconds
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>
